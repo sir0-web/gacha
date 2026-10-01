@@ -2,7 +2,10 @@
 'use strict';
 
 const $ = s => document.querySelector(s);
-const KEY = 'gacha.v1';
+const CFG = window.GACHA_CONFIG || {};
+const ONLINE = !!(CFG.supabaseUrl && CFG.supabaseKey);
+const ROOM = (new URLSearchParams(location.search).get('room') || '').trim().slice(0, 64) || 'main';
+const KEY = 'gacha.v2:' + ROOM;
 const MAX_BODIES = 60;
 const HUES = [350, 28, 48, 140, 190, 215, 265, 320, 10, 75, 165, 200, 240, 285, 335, 95];
 // lv は既定値の版。同梱の machine.png に合わせた値なので、変えたら lv を上げて保存済みの値を捨てる
@@ -49,7 +52,7 @@ function saveLocal() {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* 保存不可でも動作は継続 */ }
 }
 function save() {
-  state.rev = Math.max(Date.now(), (state.rev || 0) + 1);   // 新しい方を正とするための版番号
+  dirty = true;
   saveLocal();
   schedulePush();
 }
@@ -124,8 +127,10 @@ function drawSingle(cv, c, px) {
 const domeCv = $('#domeCanvas');
 let bodies = [], raf = 0, last = 0, awakeUntil = 0, shakeUntil = 0;
 
-function syncBodies() {
-  const p = pool().slice(0, MAX_BODIES);
+function syncBodies(extra) {
+  const p = pool();
+  if (extra) p.unshift(extra);
+  p.length = Math.min(p.length, MAX_BODIES);
   const ids = new Map(p.map(i => [i.id, i]));
   bodies = bodies.filter(b => ids.has(b.id));
   const r = Math.min(.2, Math.max(.085, Math.sqrt(.42 / Math.max(1, p.length))));
@@ -243,26 +248,44 @@ function toast(msg) {
   toastTimer = setTimeout(() => t.classList.remove('on'), 2200);
 }
 
+// 抽選して確定する。共有中に他の人と同時に回した場合は、最新の状態で引き直す
+async function drawCommitted() {
+  if (ONLINE) {
+    while (pushing) await sleep(50);
+    if (pushTimer || dirty) await pushNow(true);
+    await syncPull(true);
+    if (!remoteRev) { toast('通信できないため抽選できませんでした'); return null; }
+  }
+  for (let i = 0; i < 6; i++) {
+    if (!state.items.length) { toast('中身を追加してください'); switchTab('items'); return null; }
+    const prevRound = state.round;
+    if (!pool().length) state.round++;          // 空になったので全員復活
+    const p = pool(), it = p[randInt(p.length)];
+    const entry = { no: state.history.length + 1, itemId: it.id, name: it.name, c: it.c, round: state.round, prevRound, t: Date.now() };
+    state.history.push(entry);
+    saveLocal();
+    if (!ONLINE) return entry;
+    const res = await pushNow(true);
+    if (res === 'ok') return entry;
+    if (res === 'error') {
+      state.history.pop(); state.round = prevRound; saveLocal();
+      toast('通信できないため抽選できませんでした');
+      return null;
+    }
+  }
+  toast('混み合っています。もう一度お試しください');
+  return null;
+}
+
 async function pull() {
   if (reveal.classList.contains('on')) { if (!busy) closeReveal(); return; }
   if (busy) return;
   busy = true; renderControls();
-  await syncPull(true);           // 他の端末の最新状態を取り込んでから抽選する
-  if (!state.items.length) {
-    busy = false; renderControls();
-    toast('中身を追加してください'); switchTab('items'); return;
-  }
-  const fast = state.opts.fast, prevRound = state.round;
-
-  if (!pool().length) {           // 空になったので全員復活
-    state.round++;
-    syncBodies(); renderStats();
-    await sleep(fast ? 200 : 800);
-  }
-  const p = pool(), it = p[randInt(p.length)];
-  const entry = { no: state.history.length + 1, itemId: it.id, name: it.name, c: it.c, round: state.round, prevRound, t: Date.now() };
-  state.history.push(entry);
-  save();
+  const entry = await drawCommitted();
+  if (!entry) { busy = false; render(); return; }
+  const it = { id: entry.itemId, c: entry.c }, fast = state.opts.fast;
+  syncBodies(it);                 // 当たりのカプセルは排出するまでドームに残す
+  if (entry.round !== entry.prevRound) await sleep(fast ? 200 : 800);
 
   knobAngle += 360;
   $('#knobRot').style.transform = `rotate(${knobAngle}deg)`;
@@ -418,7 +441,7 @@ function buildSliders() {
     inp.type = 'range'; inp.min = min; inp.max = max; inp.step = stepv; inp.value = state.layout[k];
     inp.addEventListener('input', () => {
       state.layout[k] = +inp.value; out.textContent = inp.value;
-      save(); applyLayout();
+      saveLocal(); applyLayout();
       if (k === 'cols' || k === 'rows' || k === 'fill') { renderItems(); renderHistory(); }
     });
     row.append(el('span', '', label), inp, out);
@@ -442,109 +465,94 @@ function confirmBtn(btn, fn) {
   });
 }
 
-// ---------- sync (GitHub の非公開 Gist に状態を置いて端末間で共有) ----------
-const SYNC_KEY = 'gacha.sync', SYNC_FILE = 'gacha-state.json';
-let sync = {}, pushTimer = 0, pushing = false;
-try { sync = JSON.parse(localStorage.getItem(SYNC_KEY)) || {}; } catch (e) { /* 未設定 */ }
+// ---------- 共有 (Supabase の gacha_rooms テーブルに 1 ルーム 1 行で置く) ----------
+// rev が一致するときだけ上書きするので、同時操作でも他の人の変更を黙って消さない
+const REST = ONLINE ? CFG.supabaseUrl.replace(/\/+$/, '') + '/rest/v1/gacha_rooms' : '';
+const ROW = '?id=eq.' + encodeURIComponent(ROOM);
+let remoteRev = 0, pushTimer = 0, pushing = false, dirty = false;
 
-function storeSync() {
-  try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch (e) { /* 保存不可 */ }
-}
 function setSyncStatus(msg) {
-  $('#syncStatus').textContent = sync.gistId ? msg : '';
+  $('#syncStatus').textContent = msg;
   $('#syncStatus2').textContent = msg;
 }
-const syncedNow = () => setSyncStatus('☁ 同期済み ' + new Date().toLocaleTimeString('ja-JP'));
-async function api(path, opt = {}) {
-  const headers = { Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + sync.token };
-  if (opt.body) headers['Content-Type'] = 'application/json';
-  const r = await fetch('https://api.github.com' + path, { cache: 'no-store', signal: AbortSignal.timeout(8000), ...opt, headers });
-  if (!r.ok) throw new Error(r.status === 401 ? 'トークンが無効です' : 'GitHub エラー ' + r.status);
+const syncOk = () => setSyncStatus('☁ みんなと共有中' + (ROOM === 'main' ? '' : `（ルーム: ${ROOM}）`));
+const syncErr = e => setSyncStatus('⚠ 通信できません（' + e.message + '）');
+async function db(method, query, body, prefer) {
+  const headers = { apikey: CFG.supabaseKey };
+  if (CFG.supabaseKey.startsWith('eyJ')) headers.Authorization = 'Bearer ' + CFG.supabaseKey;
+  if (body) headers['Content-Type'] = 'application/json';
+  if (prefer) headers.Prefer = prefer;
+  const r = await fetch(REST + query, { method, headers, body: body && JSON.stringify(body), cache: 'no-store', signal: AbortSignal.timeout(8000) });
+  if (!r.ok) throw new Error('エラー ' + r.status);
   return r.json();
 }
-// 端末間で共有する部分（効果音などの好みは端末ごと）
+const fetchRow = async () => (await db('GET', ROW + '&select=data,rev'))[0];
+// 全員で共有する部分（効果音・位置合わせは端末ごと）
 function sharedState() {
-  const { title, items, history, round, seq, layout, rev } = state;
-  return JSON.stringify({ title, items, history, round, seq, layout, rev });
+  const { title, items, history, round, seq } = state;
+  return { title, items, history, round, seq };
 }
-function applyRemote(r) {
+function applyRemote(row, quiet) {
+  const r = row.data;
+  remoteRev = row.rev; dirty = false;
   if (!r || !Array.isArray(r.items) || !Array.isArray(r.history)) return;
-  state = { ...fresh(), ...r, opts: state.opts, layout: mergeLayout(r.layout) };
+  const had = state.history.length, last = r.history[r.history.length - 1];
+  state = { ...state, title: r.title, items: r.items, history: r.history, round: r.round, seq: r.seq };
   saveLocal();
-  $('#titleInput').value = state.title;
-  buildSliders(); applyLayout(); syncBodies(); render();
+  if (document.activeElement !== $('#titleInput')) $('#titleInput').value = state.title;
+  syncBodies(); render();
+  if (!quiet && had && r.history.length > had) toast(`「${last.name}」が当選しました`);
 }
 function schedulePush() {
-  if (!sync.gistId) return;
+  if (!ONLINE) return;
   clearTimeout(pushTimer);
-  pushTimer = setTimeout(syncPush, 600);
-  setSyncStatus('☁ 保存中…');
+  pushTimer = setTimeout(() => { if (pushing || busy) schedulePush(); else pushNow(); }, 400);
 }
-async function syncPush() {
-  pushTimer = 0;
-  if (pushing) { schedulePush(); return; }
+// 戻り値: 'ok' / 'conflict'（他の人が先に更新 → 最新を取り込み済み） / 'error'
+async function pushNow(quiet) {
+  clearTimeout(pushTimer); pushTimer = 0;
+  if (!ONLINE) return 'ok';
+  if (!remoteRev) { await syncPull(true); return remoteRev ? 'conflict' : 'error'; }
   pushing = true;
   try {
-    await api('/gists/' + sync.gistId, { method: 'PATCH', body: JSON.stringify({ files: { [SYNC_FILE]: { content: sharedState() } } }) });
-    syncedNow();
-  } catch (e) { setSyncStatus('⚠ 同期できません（' + e.message + '）'); }
-  pushing = false;
+    const rows = await db('PATCH', ROW + '&rev=eq.' + remoteRev, { data: sharedState(), rev: remoteRev + 1, updated_at: new Date().toISOString() }, 'return=representation');
+    if (rows.length) { remoteRev = rows[0].rev; dirty = false; syncOk(); return 'ok'; }
+    const row = await fetchRow();
+    if (row) applyRemote(row, quiet);
+    if (!quiet) toast('他の人の操作と重なったため、最新の状態に更新しました');
+    return 'conflict';
+  } catch (e) { syncErr(e); return 'error'; }
+  finally { pushing = false; }
 }
-// mode: true = 演出中でも取り込む / 'adopt' = 版に関係なく相手側を採用
-async function syncPull(mode) {
-  if (!sync.gistId || (busy && !mode)) return;
+async function syncPull(force) {
+  if (!ONLINE || (busy && !force)) return;
   try {
-    const f = (await api('/gists/' + sync.gistId)).files[SYNC_FILE];
-    if (busy && !mode) return;
-    if (!f) { schedulePush(); return; }
-    const r = JSON.parse(f.truncated ? await (await fetch(f.raw_url, { cache: 'no-store' })).text() : f.content);
-    const d = (r.rev || 0) - (state.rev || 0);
-    if (mode === 'adopt' || d > 0) applyRemote(r);
-    else if (d < 0 && !pushTimer) schedulePush();
-    if (!pushTimer) syncedNow();
-  } catch (e) { setSyncStatus('⚠ 同期できません（' + e.message + '）'); }
-}
-async function syncConnect(token) {
-  sync = { token };
-  setSyncStatus('接続中…');
-  try {
-    const mine = (await api('/gists?per_page=100')).find(g => g.files && g.files[SYNC_FILE]);
-    if (mine) {
-      sync.gistId = mine.id; storeSync();
-      await syncPull('adopt');
-      toast('同期データを読み込みました');
-    } else {
-      const made = await api('/gists', { method: 'POST', body: JSON.stringify({ description: 'ガチャマシーン 同期データ', public: false, files: { [SYNC_FILE]: { content: sharedState() } } }) });
-      sync.gistId = made.id; storeSync();
-      syncedNow();
-      toast('同期を開始しました');
+    let row = await fetchRow();
+    if (!row) {                    // 初めて開かれたルームは今の内容で作る
+      const made = await db('POST', '', { id: ROOM, data: sharedState(), rev: 1 }, 'resolution=ignore-duplicates,return=representation');
+      if (made[0]) { remoteRev = made[0].rev; dirty = false; syncOk(); return; }
+      row = await fetchRow();
     }
-  } catch (e) {
-    sync = {};
-    setSyncStatus('⚠ 接続できません（' + e.message + '）');
-  }
-  renderSync();
+    if ((busy && !force) || pushTimer || pushing) return;   // 送信待ちがあれば送信側で解決する
+    if (row.rev !== remoteRev) applyRemote(row);
+    else if (dirty) schedulePush();
+    syncOk();
+  } catch (e) { syncErr(e); }
 }
-function renderSync() {
-  $('#syncOff').hidden = !!sync.gistId;
-  $('#syncOn').hidden = !sync.gistId;
+function initShare() {
+  $('#roomInput').value = ROOM;
+  $('#roomForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const v = $('#roomInput').value.trim();
+    if (v && v !== ROOM) location.search = '?room=' + encodeURIComponent(v);
+  });
+  $('#copyUrl').addEventListener('click', () => {
+    navigator.clipboard.writeText(location.href).then(() => toast('URLをコピーしました'), () => toast(location.href));
+  });
+  if (!ONLINE) { $('#syncStatus2').textContent = '共有は未設定です。この端末のブラウザ内だけに保存しています。'; return; }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncPull(); });
+  setInterval(() => { if (!document.hidden) syncPull(); }, 3000);
 }
-$('#syncForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const t = $('#syncToken').value.trim();
-  $('#syncToken').value = '';
-  if (t) syncConnect(t);
-});
-$('#syncNow').addEventListener('click', () => syncPull());
-$('#syncDisconnect').addEventListener('click', () => {
-  sync = {};
-  try { localStorage.removeItem(SYNC_KEY); } catch (e) { /* 保存不可 */ }
-  setSyncStatus('');
-  renderSync();
-  toast('この端末の同期を解除しました');
-});
-document.addEventListener('visibilitychange', () => { if (!document.hidden) syncPull(); });
-setInterval(() => { if (!document.hidden) syncPull(); }, 15000);
 
 // ---------- events ----------
 $('#pullBtn').addEventListener('click', pull);
@@ -589,12 +597,12 @@ confirmBtn($('#clearHistory'), () => {
 $('#titleInput').value = state.title;
 $('#titleInput').addEventListener('input', e => { state.title = e.target.value || 'ガチャマシーン'; save(); renderTitle(); });
 $('#optSound').checked = state.opts.sound;
-$('#optSound').addEventListener('change', e => { state.opts.sound = e.target.checked; save(); });
+$('#optSound').addEventListener('change', e => { state.opts.sound = e.target.checked; saveLocal(); });
 $('#optFast').checked = state.opts.fast;
-$('#optFast').addEventListener('change', e => { state.opts.fast = e.target.checked; save(); });
+$('#optFast').addEventListener('change', e => { state.opts.fast = e.target.checked; saveLocal(); });
 $('#layoutReset').addEventListener('click', () => {
   state.layout = { ...DEF_LAYOUT };
-  save(); buildSliders(); applyLayout(); renderItems(); renderHistory();
+  saveLocal(); buildSliders(); applyLayout(); renderItems(); renderHistory();
 });
 window.addEventListener('resize', () => wake(1));
 
@@ -606,6 +614,6 @@ render();
 syncBodies();
 for (let i = 0; i < 240; i++) step(1 / 60, false);   // 開いた時点で底に積もった状態にしておく
 loadSprites();
-renderSync();
+initShare();
 syncPull();
 })();
