@@ -282,7 +282,9 @@ textarea { resize: vertical; line-height: 1.6; }
 .reveal.open .rv-name { transform: none; opacity: 1; transition: transform .55s cubic-bezier(.2, 1.7, .4, 1) .12s, opacity .2s .12s; }
 .rv-meta { margin: 0; color: var(--mute); font-size: 14px; }
 .rv-actions { display: flex; gap: 12px; align-items: center; }
-.rv-meta, .rv-actions { opacity: 0; }
+/* 後光とカプセルは枠からはみ出して重なるので、クリックを奪わせずボタンを手前に置く */
+.burst, .caps { pointer-events: none; }
+.rv-meta, .rv-actions { position: relative; z-index: 2; opacity: 0; }
 .reveal.open .rv-meta, .reveal.open .rv-actions { opacity: 1; transition: opacity .3s .5s; }
 
 .confetti { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
