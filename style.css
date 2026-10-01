@@ -51,7 +51,7 @@ button, input, textarea { font: inherit; color: inherit; }
 
 /* ---------- machine ---------- */
 .machine {
-  --dx: 50; --dy: 30; --ds: 74; --kx: 50; --ky: 68; --ks: 24; --ox: 50; --oy: 88; --os: 16;
+  --dx: 50; --dy: 30; --ds: 74; --ce: 100; --fl: 100; --kx: 50; --ky: 68; --ks: 24; --ox: 50; --oy: 88; --os: 16;
   position: relative;
   width: min(92vw, calc(62vh * 2 / 3), 460px);
   aspect-ratio: 2 / 3;
@@ -102,6 +102,7 @@ button, input, textarea { font: inherit; color: inherit; }
   position: absolute; left: calc(var(--dx) * 1%); top: calc(var(--dy) * 1%);
   width: calc(var(--ds) * 1%); aspect-ratio: 1; transform: translate(-50%, -50%);
   border-radius: 50%; overflow: hidden; z-index: 2;
+  clip-path: inset(calc((100 - var(--ce)) * .5%) 0 calc((100 - var(--fl)) * .5%) 0);
 }
 .dome canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .dome-glass {
@@ -150,7 +151,8 @@ button, input, textarea { font: inherit; color: inherit; }
   100% { transform: translateY(0); opacity: 1; }
 }
 
-.show-guides .dome, .show-guides .knob, .show-guides .outlet { outline: 2px dashed #5cf2ff; outline-offset: -1px; }
+.show-guides .knob, .show-guides .outlet { outline: 2px dashed #5cf2ff; outline-offset: -1px; }
+.show-guides .dome { background: rgba(92, 242, 255, .22); }
 .show-guides .outlet { border-radius: 50%; }
 
 /* ---------- buttons ---------- */
@@ -274,7 +276,7 @@ textarea { resize: vertical; line-height: 1.6; }
   font-size: clamp(30px, 8vw, 76px); font-weight: 800; line-height: 1.2;
   background: linear-gradient(#fff, #fff3b8 40%, var(--gold));
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 4px 0 #a03a00) drop-shadow(0 0 22px rgba(255, 190, 60, .8));
+  filter: drop-shadow(0 4px 0 #7a2600) drop-shadow(0 0 6px #5a1a00) drop-shadow(0 0 22px rgba(90, 30, 0, .9));
   transform: scale(.2); opacity: 0;
 }
 .reveal.open .rv-name { transform: none; opacity: 1; transition: transform .55s cubic-bezier(.2, 1.7, .4, 1) .12s, opacity .2s .12s; }

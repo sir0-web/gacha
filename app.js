@@ -5,7 +5,9 @@ const $ = s => document.querySelector(s);
 const KEY = 'gacha.v1';
 const MAX_BODIES = 60;
 const HUES = [350, 28, 48, 140, 190, 215, 265, 320, 10, 75, 165, 200, 240, 285, 335, 95];
-const DEF_LAYOUT = { dx: 50, dy: 30, ds: 74, kx: 50, ky: 68, ks: 24, ox: 50, oy: 88, os: 16, cols: 4, rows: 4, fill: 80 };
+// lv は既定値の版。同梱の machine.png に合わせた値なので、変えたら lv を上げて保存済みの値を捨てる
+const DEF_LAYOUT = { lv: 2, dx: 50, dy: 33.9, ds: 74.5, ce: 72, fl: 70, kx: 50, ky: 67.7, ks: 27, ox: 50, oy: 87.5, os: 18, cols: 4, rows: 4, fill: 81 };
+const mergeLayout = l => (l && l.lv === DEF_LAYOUT.lv ? { ...DEF_LAYOUT, ...l } : { ...DEF_LAYOUT });
 const SPRITES = {
   machine: ['assets/machine.png', 'マシン本体'],
   knob: ['assets/knob.png', 'ハンドル'],
@@ -14,8 +16,9 @@ const SPRITES = {
   burst: ['assets/burst.png', '後光エフェクト'],
 };
 const SLIDERS = [
-  ['dx', 'ドーム 中心X (%)', 0, 100, .5], ['dy', 'ドーム 中心Y (%)', 0, 100, .5], ['ds', 'ドーム 直径 (%)', 10, 100, .5],
-  ['kx', 'ハンドル 中心X (%)', 0, 100, .5], ['ky', 'ハンドル 中心Y (%)', 0, 100, .5], ['ks', 'ハンドル サイズ (%)', 5, 60, .5],
+  ['dx', 'ドーム 中心X (%)', 0, 100, .1], ['dy', 'ドーム 中心Y (%)', 0, 100, .1], ['ds', 'ドーム 直径 (%)', 10, 100, .5],
+  ['ce', 'ドーム 天井の高さ (%)', 10, 100, 1], ['fl', 'ドーム 床の高さ (%)', 10, 100, 1],
+  ['kx', 'ハンドル 中心X (%)', 0, 100, .1], ['ky', 'ハンドル 中心Y (%)', 0, 100, .1], ['ks', 'ハンドル サイズ (%)', 5, 60, .5],
   ['ox', '取り出し口 中心X (%)', 0, 100, .5], ['oy', '取り出し口 中心Y (%)', 0, 100, .5], ['os', '出てくるカプセルのサイズ (%)', 5, 40, .5],
   ['cols', 'カプセル画像 列数', 1, 8, 1], ['rows', 'カプセル画像 行数', 1, 8, 1], ['fill', 'カプセルがマス内に占める割合 (%)', 40, 100, 1],
 ];
@@ -37,7 +40,7 @@ function load() {
     const p = JSON.parse(localStorage.getItem(KEY));
     if (p && Array.isArray(p.items) && Array.isArray(p.history)) {
       const f = fresh();
-      return { ...f, ...p, opts: { ...f.opts, ...p.opts }, layout: { ...DEF_LAYOUT, ...p.layout } };
+      return { ...f, ...p, opts: { ...f.opts, ...p.opts }, layout: mergeLayout(p.layout) };
     }
   } catch (e) { /* 保存データなし・破損時は初期状態 */ }
   return fresh();
@@ -135,6 +138,7 @@ function syncBodies() {
   wake(4);
 }
 function step(dt, shaking) {
+  const fl = state.layout.fl / 100, ce = state.layout.ce / 100;
   for (const b of bodies) {
     b.vy += 3.6 * dt;
     if (shaking) {
@@ -168,6 +172,17 @@ function step(dt, shaking) {
       if (vn > 0) { b.vx -= 1.3 * vn * nx; b.vy -= 1.3 * vn * ny; }
       b.vx *= .985; b.vy *= .985;
       b.va += ((b.vy * nx - b.vx * ny) / b.r - b.va) * .2;
+    }
+    for (const b of bodies) {     // 球の上下を切り落とした床と天井
+      if (b.y > fl - b.r) {
+        b.y = fl - b.r;
+        if (b.vy > 0) b.vy *= -.3;
+        b.vx *= .985;
+        b.va += (b.vx / b.r - b.va) * .2;
+      } else if (b.y < b.r - ce) {
+        b.y = b.r - ce;
+        if (b.vy < 0) b.vy *= -.3;
+      }
     }
   }
   for (const b of bodies) { b.vx *= .998; b.vy *= .998; b.va *= .97; }
@@ -454,7 +469,7 @@ function sharedState() {
 }
 function applyRemote(r) {
   if (!r || !Array.isArray(r.items) || !Array.isArray(r.history)) return;
-  state = { ...fresh(), ...r, opts: state.opts, layout: { ...DEF_LAYOUT, ...r.layout } };
+  state = { ...fresh(), ...r, opts: state.opts, layout: mergeLayout(r.layout) };
   saveLocal();
   $('#titleInput').value = state.title;
   buildSliders(); applyLayout(); syncBodies(); render();
@@ -589,6 +604,7 @@ buildSliders();
 renderSprites();
 render();
 syncBodies();
+for (let i = 0; i < 240; i++) step(1 / 60, false);   // 開いた時点で底に積もった状態にしておく
 loadSprites();
 renderSync();
 syncPull();
