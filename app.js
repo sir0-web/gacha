@@ -289,7 +289,7 @@ async function pull() {
     busy = false; render(); return;
   }
 
-  // 1回目は仮当選の演出用。履歴・残数・共有データには記録しない
+  // 最初の名前は演出上の候補表示。履歴・残数・共有データには記録しない
   const preview = candidates[randInt(candidates.length)];
   const previewIt = { id: preview.id, c: preview.c };
   syncBodies(previewIt);
@@ -304,54 +304,67 @@ async function pull() {
     machine.classList.remove('spin');
   };
 
-  // 通常抽選：仮当選者を排出して名前だけ先に見せる
-  await spinMachine(fast ? 400 : 1200, fast ? 350 : 1100, fast ? 4 : 12);
+  // 第一幕：いつもの抽選。名前を見せて、期待を持たせる
+  await spinMachine(fast ? 500 : 1450, fast ? 450 : 1300, fast ? 5 : 14);
   drawSingle($('#outCanvas'), previewIt.c);
   $('#outlet').classList.add('show');
   sfx.drop();
-  await sleep(fast ? 300 : 800);
+  await sleep(fast ? 350 : 900);
   $('#outlet').classList.remove('show');
   drawSingle($('#halfTop'), previewIt.c, 480);
   drawSingle($('#halfBot'), previewIt.c, 480);
 
   $('#rvName').textContent = preview.name;
-  $('#rvMeta').textContent = '仮当選…？';
+  $('#rvMeta').textContent = '';
   reveal.className = 'reveal on preview';
-  await sleep(2000); // ご指定どおり、仮当選の名前を2秒間見せる
+  await sleep(fast ? 1800 : 2600);
+
+  // 第二幕：違和感。静けさから少しずつ光と音を強める
+  $('#rvName').textContent = 'おや、、ガチャの様子が・・・！？';
+  reveal.className = 'reveal on omen';
+  stage?.classList.add('omen');
+  tone(220, 0, fast ? .8 : 1.5, 'sine', .045, 95);
+  await sleep(fast ? 1100 : 1900);
+  sfx.rattle();
+  await sleep(fast ? 700 : 1300);
+  stage?.classList.remove('omen');
   reveal.className = 'reveal';
 
-  // 確変突入：ここから本抽選に向けて演出を切り替える
-  $('#rvName').textContent = '確変突入!!';
-  $('#rvMeta').textContent = 'まだチャンスは終わらない…！';
+  // 第三幕：確変突入。短い静寂のあと、画面全体を一気に解放
+  await sleep(fast ? 300 : 750);
+  $('#rvName').textContent = '確変突入ぅぅぅ！！！';
+  $('#rvMeta').textContent = '';
   reveal.className = 'reveal on upgrade';
   stage?.classList.add('upgrade');
   machine.classList.add('upgrade-spin');
   sfx.rattle();
-  shakeUntil = performance.now() + (fast ? 700 : 2200);
-  wake(fast ? 1.2 : 3.2);
-  await sleep(fast ? 650 : 1900);
+  shakeUntil = performance.now() + (fast ? 1400 : 3000);
+  wake(fast ? 2 : 4);
+  await sleep(fast ? 1500 : 3000);
   machine.classList.remove('upgrade-spin');
   stage?.classList.remove('upgrade');
   reveal.className = 'reveal';
 
-  // 2回目だけを正式な抽選として確定し、履歴・共有データへ保存
-  $('#rvName').textContent = '再抽選開始…！';
-  $('#rvMeta').textContent = '本当の当選者は…!?';
+  // 最終幕へ。暗転してから本抽選を始める
+  await sleep(fast ? 450 : 1000);
+  $('#rvName').textContent = '本当の当選者は……';
+  $('#rvMeta').textContent = '';
   reveal.className = 'reveal on preview';
-  await spinMachine(fast ? 650 : 1700, fast ? 650 : 1600, fast ? 8 : 18);
+  await sleep(fast ? 650 : 1200);
+  await spinMachine(fast ? 850 : 2300, fast ? 800 : 2100, fast ? 10 : 24);
   const entry = await drawCommitted();
   if (!entry) {
     reveal.className = 'reveal';
     busy = false; render(); return;
   }
 
-  // 本抽選で確定したカプセルを排出し、最終発表へ
+  // ここで初めて正式確定。履歴・残数・共有データに反映
   const it = { id: entry.itemId, c: entry.c };
   syncBodies(it);
   drawSingle($('#outCanvas'), it.c);
   $('#outlet').classList.add('show');
   sfx.drop();
-  await sleep(fast ? 180 : 450);
+  await sleep(fast ? 250 : 650);
   $('#outlet').classList.remove('show');
   drawSingle($('#halfTop'), it.c, 480);
   drawSingle($('#halfBot'), it.c, 480);
@@ -359,9 +372,9 @@ async function pull() {
   $('#rvName').textContent = entry.name;
   const left = pool().length;
   $('#rvMeta').textContent = `No.${entry.no} ・ ${entry.round}周目 ・ ` + (left ? `残り ${left}` : '全部出ました！');
-  await sleep(fast ? 100 : 280);
+  await sleep(fast ? 180 : 450);
   reveal.classList.add('shake'); sfx.rattle();
-  await sleep(fast ? 160 : 550);
+  await sleep(fast ? 250 : 800);
   reveal.classList.remove('shake');
   reveal.classList.add('open');
   sfx.fanfare(); confetti();
