@@ -354,7 +354,7 @@ async function pull() {
 
   // 最終幕へ。暗転してから本抽選を始める
   await sleep(fast ? 220 : 450);
-  $('#rvName').textContent = '本当の当選者は……';
+  $('#rvName').textContent = 'うぇいうぇいうぇいいぃぃぃ！';
   $('#rvMeta').textContent = '';
   reveal.className = 'reveal on preview';
   await sleep(fast ? 350 : 650);
