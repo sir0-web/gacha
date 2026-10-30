@@ -367,6 +367,8 @@ async function pull() {
 
   // ここで初めて正式確定。履歴・残数・共有データに反映
   const it = { id: entry.itemId, c: entry.c };
+  // 当選確定後に画面の残数・当選済み表示・履歴を即時更新
+  render();
   syncBodies(it);
   drawSingle($('#outCanvas'), it.c);
   $('#outlet').classList.add('show');
