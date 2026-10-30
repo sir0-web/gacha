@@ -281,51 +281,84 @@ async function pull() {
   if (reveal.classList.contains('on')) { if (!busy) closeReveal(); return; }
   if (busy) return;
   busy = true; renderControls();
-  const entry = await drawCommitted();
-  if (!entry) { busy = false; render(); return; }
-  const it = { id: entry.itemId, c: entry.c }, fast = state.opts.fast;
-  syncBodies(it);                 // 当たりのカプセルは排出するまでドームに残す
-  if (entry.round !== entry.prevRound) await sleep(fast ? 200 : 800);
+  const fast = state.opts.fast;
+  const stage = machine.closest('.stage');
+  const candidates = pool().length ? pool() : state.items;
+  if (!candidates.length) {
+    toast('中身を追加してください'); switchTab('items');
+    busy = false; render(); return;
+  }
 
-  knobAngle += 360;
-  $('#knobRot').style.transform = `rotate(${knobAngle}deg)`;
-  machine.classList.add('spin');
-  sfx.ratchet(fast ? 4 : 12);
-  shakeUntil = performance.now() + (fast ? 350 : 1100);
-  wake(5);
-  await sleep(fast ? 400 : 1200);
-  machine.classList.remove('spin');
+  // 1回目は仮当選の演出用。履歴・残数・共有データには記録しない
+  const preview = candidates[randInt(candidates.length)];
+  const previewIt = { id: preview.id, c: preview.c };
+  syncBodies(previewIt);
+  const spinMachine = async (duration, shakeDuration, ratchetCount) => {
+    knobAngle += 360;
+    $('#knobRot').style.transform = `rotate(${knobAngle}deg)`;
+    machine.classList.add('spin');
+    sfx.ratchet(ratchetCount);
+    shakeUntil = performance.now() + shakeDuration;
+    wake(duration / 1000 + 2);
+    await sleep(duration);
+    machine.classList.remove('spin');
+  };
 
-  syncBodies();
-  drawSingle($('#outCanvas'), it.c);
+  // 通常抽選：仮当選者を排出して名前だけ先に見せる
+  await spinMachine(fast ? 400 : 1200, fast ? 350 : 1100, fast ? 4 : 12);
+  drawSingle($('#outCanvas'), previewIt.c);
   $('#outlet').classList.add('show');
   sfx.drop();
   await sleep(fast ? 300 : 800);
   $('#outlet').classList.remove('show');
+  drawSingle($('#halfTop'), previewIt.c, 480);
+  drawSingle($('#halfBot'), previewIt.c, 480);
 
-  drawSingle($('#halfTop'), it.c, 480);
-  drawSingle($('#halfBot'), it.c, 480);
+  $('#rvName').textContent = preview.name;
+  $('#rvMeta').textContent = '仮当選…？';
+  reveal.className = 'reveal on preview';
+  await sleep(2000); // ご指定どおり、仮当選の名前を2秒間見せる
+  reveal.className = 'reveal';
 
-  // 昇格演出：抽選結果はここまでに確定済み。演出中に再抽選・履歴更新はしない
-  const stage = machine.closest('.stage');
-  $('#rvName').textContent = '昇格…!?';
-  $('#rvMeta').textContent = 'まだ終わらない…！';
+  // 確変突入：ここから本抽選に向けて演出を切り替える
+  $('#rvName').textContent = '確変突入!!';
+  $('#rvMeta').textContent = 'まだチャンスは終わらない…！';
   reveal.className = 'reveal on upgrade';
   stage?.classList.add('upgrade');
   machine.classList.add('upgrade-spin');
-  render();
   sfx.rattle();
   shakeUntil = performance.now() + (fast ? 700 : 2200);
   wake(fast ? 1.2 : 3.2);
   await sleep(fast ? 650 : 1900);
   machine.classList.remove('upgrade-spin');
   stage?.classList.remove('upgrade');
+  reveal.className = 'reveal';
 
-  // 確定済みの同じ景品名を最終発表
+  // 2回目だけを正式な抽選として確定し、履歴・共有データへ保存
+  $('#rvName').textContent = '再抽選開始…！';
+  $('#rvMeta').textContent = '本当の当選者は…!?';
+  reveal.className = 'reveal on preview';
+  await spinMachine(fast ? 650 : 1700, fast ? 650 : 1600, fast ? 8 : 18);
+  const entry = await drawCommitted();
+  if (!entry) {
+    reveal.className = 'reveal';
+    busy = false; render(); return;
+  }
+
+  // 本抽選で確定したカプセルを排出し、最終発表へ
+  const it = { id: entry.itemId, c: entry.c };
+  syncBodies(it);
+  drawSingle($('#outCanvas'), it.c);
+  $('#outlet').classList.add('show');
+  sfx.drop();
+  await sleep(fast ? 180 : 450);
+  $('#outlet').classList.remove('show');
+  drawSingle($('#halfTop'), it.c, 480);
+  drawSingle($('#halfBot'), it.c, 480);
+  reveal.className = 'reveal on';
   $('#rvName').textContent = entry.name;
   const left = pool().length;
   $('#rvMeta').textContent = `No.${entry.no} ・ ${entry.round}周目 ・ ` + (left ? `残り ${left}` : '全部出ました！');
-  reveal.className = 'reveal on';
   await sleep(fast ? 100 : 280);
   reveal.classList.add('shake'); sfx.rattle();
   await sleep(fast ? 160 : 550);
