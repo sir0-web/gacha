@@ -361,5 +361,5 @@ textarea { resize: vertical; line-height: 1.6; }
   animation: upgradeText .65s ease-in-out infinite alternate;
 }
 .reveal.preview .rv-meta { opacity: 1; color: #ffe8a6; }
-.reveal.preview .rv-center { visibility: hidden; }
+.reveal.preview .burst, .reveal.preview .caps { visibility: hidden; }
 .reveal.preview .rv-name, .reveal.preview .rv-meta { visibility: visible; }
