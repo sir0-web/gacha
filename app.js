@@ -317,7 +317,7 @@ async function pull() {
   $('#rvName').textContent = preview.name;
   $('#rvMeta').textContent = '';
   reveal.className = 'reveal on preview';
-  await sleep(fast ? 700 : 1100);
+  await sleep(2000);
 
   // 当選者が出た直後に強い閃光。その光の中から違和感演出へ
   reveal.className = 'reveal on flash';
