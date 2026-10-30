@@ -348,3 +348,18 @@ textarea { resize: vertical; line-height: 1.6; }
 @media (prefers-reduced-motion: reduce) {
   .stage.upgrade, .machine.upgrade-spin, .reveal.upgrade::before, .reveal.upgrade .rv-name { animation: none; }
 }
+
+
+/* ---------- two-stage draw preview ---------- */
+.reveal.preview {
+  background: radial-gradient(circle at 50% 48%, rgba(255, 220, 120, .22), rgba(8, 4, 24, .94) 62%);
+}
+.reveal.preview .rv-name {
+  transform: none; opacity: 1;
+  color: #fff4bf; background: none; -webkit-text-fill-color: #fff4bf;
+  filter: drop-shadow(0 0 12px #ffb52e) drop-shadow(0 0 30px rgba(255, 93, 143, .8));
+  animation: upgradeText .65s ease-in-out infinite alternate;
+}
+.reveal.preview .rv-meta { opacity: 1; color: #ffe8a6; }
+.reveal.preview .rv-center { visibility: hidden; }
+.reveal.preview .rv-name, .reveal.preview .rv-meta { visibility: visible; }
