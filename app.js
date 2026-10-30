@@ -305,14 +305,30 @@ async function pull() {
 
   drawSingle($('#halfTop'), it.c, 480);
   drawSingle($('#halfBot'), it.c, 480);
+
+  // 昇格演出：抽選結果はここまでに確定済み。演出中に再抽選・履歴更新はしない
+  const stage = machine.closest('.stage');
+  $('#rvName').textContent = '昇格…!?';
+  $('#rvMeta').textContent = 'まだ終わらない…！';
+  reveal.className = 'reveal on upgrade';
+  stage?.classList.add('upgrade');
+  machine.classList.add('upgrade-spin');
+  render();
+  sfx.rattle();
+  shakeUntil = performance.now() + (fast ? 700 : 2200);
+  wake(fast ? 1.2 : 3.2);
+  await sleep(fast ? 650 : 1900);
+  machine.classList.remove('upgrade-spin');
+  stage?.classList.remove('upgrade');
+
+  // 確定済みの同じ景品名を最終発表
   $('#rvName').textContent = entry.name;
   const left = pool().length;
   $('#rvMeta').textContent = `No.${entry.no} ・ ${entry.round}周目 ・ ` + (left ? `残り ${left}` : '全部出ました！');
   reveal.className = 'reveal on';
-  render();
-  await sleep(450);
+  await sleep(fast ? 100 : 280);
   reveal.classList.add('shake'); sfx.rattle();
-  await sleep(fast ? 200 : 750);
+  await sleep(fast ? 160 : 550);
   reveal.classList.remove('shake');
   reveal.classList.add('open');
   sfx.fanfare(); confetti();

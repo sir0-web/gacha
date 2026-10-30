@@ -310,3 +310,41 @@ textarea { resize: vertical; line-height: 1.6; }
 @media (prefers-reduced-motion: reduce) {
   .machine.spin, .burst, .reveal.shake .caps { animation: none; }
 }
+
+
+/* ---------- guaranteed upgrade reveal ---------- */
+.stage.upgrade { animation: upgradeStageShake .09s linear infinite; }
+.machine.upgrade-spin { animation: upgradeMachinePulse .18s ease-in-out infinite; filter: drop-shadow(0 0 22px rgba(255, 210, 90, .95)) drop-shadow(0 24px 30px rgba(0, 0, 0, .5)); }
+.reveal.upgrade {
+  background: radial-gradient(circle at 50% 48%, rgba(255, 225, 130, .28), rgba(8, 4, 24, .94) 58%);
+}
+.reveal.upgrade::before {
+  content: ""; position: absolute; inset: -35%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 236, 160, .0) 0 7deg, rgba(255, 236, 160, .38) 8deg 10deg, transparent 12deg 20deg);
+  -webkit-mask: radial-gradient(circle, #000 0 28%, transparent 68%);
+  mask: radial-gradient(circle, #000 0 28%, transparent 68%);
+  animation: upgradeRays .8s linear infinite;
+  pointer-events: none;
+}
+.reveal.upgrade .rv-name {
+  transform: none; opacity: 1; font-size: clamp(34px, 9vw, 82px);
+  color: #fff4bf; background: none; -webkit-text-fill-color: #fff4bf;
+  filter: drop-shadow(0 0 12px #ffb52e) drop-shadow(0 0 34px #ff5d8f);
+  animation: upgradeText .55s ease-in-out infinite alternate;
+}
+.reveal.upgrade .rv-meta { opacity: 1; color: #ffe8a6; }
+@keyframes upgradeStageShake {
+  0%,100% { transform: translate(0,0) rotate(0); }
+  25% { transform: translate(-5px,2px) rotate(-.35deg); }
+  50% { transform: translate(4px,-3px) rotate(.3deg); }
+  75% { transform: translate(-3px,-2px) rotate(-.2deg); }
+}
+@keyframes upgradeMachinePulse {
+  0%,100% { transform: rotate(-2deg) scale(1.015); }
+  50% { transform: rotate(2deg) scale(1.045); }
+}
+@keyframes upgradeRays { to { transform: rotate(360deg) scale(1.08); } }
+@keyframes upgradeText { to { transform: scale(1.08); filter: drop-shadow(0 0 18px #fff) drop-shadow(0 0 42px #ffb52e); } }
+@media (prefers-reduced-motion: reduce) {
+  .stage.upgrade, .machine.upgrade-spin, .reveal.upgrade::before, .reveal.upgrade .rv-name { animation: none; }
+}
