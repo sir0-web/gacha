@@ -405,3 +405,19 @@ textarea { resize: vertical; line-height: 1.6; }
   .stage.omen, .reveal.omen::before, .reveal.omen .rv-name,
   .reveal.upgrade, .reveal.upgrade .rv-name { animation: none; }
 }
+
+
+/* ---------- one-line reveal + flash before omen ---------- */
+.rv-name { width: 94vw; max-width: 94vw; white-space: nowrap; overflow: visible; font-size: clamp(14px, 5.2vw, 64px); }
+.reveal.omen .rv-name { width: 94vw; max-width: 94vw; white-space: nowrap; font-size: clamp(14px, 4.5vw, 54px); letter-spacing: 0; }
+.reveal.upgrade .rv-name { width: 94vw; max-width: 94vw; white-space: nowrap; font-size: clamp(16px, 5.5vw, 72px); }
+.reveal.flash { background: rgba(255,255,255,.98); animation: revealFlash .42s ease-out both; }
+.reveal.flash::before { content:""; position:absolute; inset:-30%; background:radial-gradient(circle, #fff 0 12%, rgba(255,245,190,.95) 22%, transparent 66%); animation: flashBurst .42s ease-out both; }
+.stage.flash { filter: brightness(2.2) saturate(1.5); transition: filter .08s; }
+@keyframes revealFlash { 0% { opacity:1; } 35% { opacity:1; } 100% { opacity:0; } }
+@keyframes flashBurst { from { transform:scale(.25); opacity:1; } to { transform:scale(1.8); opacity:0; } }
+@media (max-width: 420px) {
+  .rv-name { font-size: clamp(13px, 5vw, 21px); }
+  .reveal.omen .rv-name { font-size: clamp(12px, 4.1vw, 18px); }
+  .reveal.upgrade .rv-name { font-size: clamp(14px, 5vw, 22px); }
+}

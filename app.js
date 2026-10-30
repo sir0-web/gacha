@@ -317,21 +317,28 @@ async function pull() {
   $('#rvName').textContent = preview.name;
   $('#rvMeta').textContent = '';
   reveal.className = 'reveal on preview';
-  await sleep(fast ? 1800 : 2600);
+  await sleep(fast ? 700 : 1100);
 
-  // 第二幕：違和感。静けさから少しずつ光と音を強める
-  $('#rvName').textContent = 'おや、、ガチャの様子が・・・！？';
+  // 当選者が出た直後に強い閃光。その光の中から違和感演出へ
+  reveal.className = 'reveal on flash';
+  stage?.classList.add('flash');
+  tone(660, 0, fast ? .28 : .42, 'sine', .11, 150);
+  await sleep(fast ? 220 : 420);
+  stage?.classList.remove('flash');
+
+  // 第二幕：光が落ち着いたところで違和感を見せる
+  $('#rvName').textContent = 'おや、、ガチャの様子が、、、';
   reveal.className = 'reveal on omen';
   stage?.classList.add('omen');
-  tone(220, 0, fast ? .8 : 1.5, 'sine', .045, 95);
-  await sleep(fast ? 1100 : 1900);
+  tone(220, 0, fast ? .55 : .85, 'sine', .045, 95);
+  await sleep(fast ? 650 : 950);
   sfx.rattle();
-  await sleep(fast ? 700 : 1300);
+  await sleep(fast ? 250 : 450);
   stage?.classList.remove('omen');
   reveal.className = 'reveal';
 
-  // 第三幕：確変突入。短い静寂のあと、画面全体を一気に解放
-  await sleep(fast ? 300 : 750);
+  // 第三幕：間を空けずに確変突入
+  await sleep(fast ? 120 : 220);
   $('#rvName').textContent = '確変突入ぅぅぅ！！！';
   $('#rvMeta').textContent = '';
   reveal.className = 'reveal on upgrade';
@@ -340,18 +347,18 @@ async function pull() {
   sfx.rattle();
   shakeUntil = performance.now() + (fast ? 1400 : 3000);
   wake(fast ? 2 : 4);
-  await sleep(fast ? 1500 : 3000);
+  await sleep(fast ? 850 : 1500);
   machine.classList.remove('upgrade-spin');
   stage?.classList.remove('upgrade');
   reveal.className = 'reveal';
 
   // 最終幕へ。暗転してから本抽選を始める
-  await sleep(fast ? 450 : 1000);
+  await sleep(fast ? 220 : 450);
   $('#rvName').textContent = '本当の当選者は……';
   $('#rvMeta').textContent = '';
   reveal.className = 'reveal on preview';
-  await sleep(fast ? 650 : 1200);
-  await spinMachine(fast ? 850 : 2300, fast ? 800 : 2100, fast ? 10 : 24);
+  await sleep(fast ? 350 : 650);
+  await spinMachine(fast ? 650 : 1500, fast ? 600 : 1300, fast ? 8 : 16);
   const entry = await drawCommitted();
   if (!entry) {
     reveal.className = 'reveal';
